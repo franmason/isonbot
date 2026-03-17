@@ -12,11 +12,39 @@ const {
 } = require('@discordjs/voice');
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
+const https = require('https');
 const YouTube = require('youtube-sr').default;
 
 const TOKEN = process.env.DISCORD_TOKEN;
-const YTDLP = path.join(__dirname, 'yt-dlp.exe');
+const isWindows = process.platform === 'win32';
+const YTDLP = path.join(__dirname, isWindows ? 'yt-dlp.exe' : 'yt-dlp');
 const FFMPEG = require('ffmpeg-static');
+
+function downloadFile(url, dest) {
+  return new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        return downloadFile(res.headers.location, dest).then(resolve).catch(reject);
+      }
+      const file = fs.createWriteStream(dest);
+      res.pipe(file);
+      file.on('finish', () => { file.close(); resolve(); });
+      file.on('error', reject);
+    }).on('error', reject);
+  });
+}
+
+async function ensureYtdlp() {
+  if (fs.existsSync(YTDLP)) return;
+  const url = isWindows
+    ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
+    : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
+  console.log('[yt-dlp] Baixando binário...');
+  await downloadFile(url, YTDLP);
+  if (!isWindows) fs.chmodSync(YTDLP, 0o755);
+  console.log('[yt-dlp] Pronto.');
+}
 
 const queues = new Map();
 const connecting = new Set();
@@ -270,4 +298,4 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-client.login(TOKEN);
+ensureYtdlp().then(() => client.login(TOKEN)).catch(console.error);
