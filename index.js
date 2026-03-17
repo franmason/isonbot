@@ -20,6 +20,7 @@ const TOKEN = process.env.DISCORD_TOKEN;
 const isWindows = process.platform === 'win32';
 const YTDLP = path.join(__dirname, isWindows ? 'yt-dlp.exe' : 'yt-dlp');
 const FFMPEG = require('ffmpeg-static');
+const COOKIES = path.join(__dirname, 'cookies.txt');
 
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
@@ -50,12 +51,18 @@ const queues = new Map();
 const connecting = new Set();
 
 function getAudioStream(url) {
-  const ytdlp = spawn(YTDLP, [
+  const args = [
     url,
     '-f', 'bestaudio',
     '--no-playlist',
     '-o', '-',
-  ]);
+  ];
+
+  if (fs.existsSync(COOKIES)) {
+    args.splice(args.length - 2, 0, '--cookies', COOKIES);
+  }
+
+  const ytdlp = spawn(YTDLP, args);
 
   const ffmpeg = spawn(FFMPEG, [
     '-fflags', 'nobuffer+discardcorrupt',
